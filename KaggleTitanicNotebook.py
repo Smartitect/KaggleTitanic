@@ -78,7 +78,9 @@ df_test = pd.read_csv('./kaggle/input/test.csv')
 df_test.shape
 
 # %%
-dataflow = dprep.auto_read_file('./kaggle/input/train.csv')
+dataflow_train = dprep.auto_read_file('./kaggle/input/train.csv')
+dataflow_test = dprep.auto_read_file('./kaggle/input/test.csv')
+dataflow = dataflow_train.append_rows([dataflow_test])
 dataflow.get_profile()
 
 # %% [markdown]
@@ -281,8 +283,12 @@ generate_box_swarm_plot(df, 'PeopleOnTicket', 'Age', 'Survived')
 # %% [markdown]
 # # Part 5 - Feature Engineering II
 #
-# Now going to work through each column in the data set to get an insight into it.
+# Here I apply any steps required to get into shape for the models.
 #
+# This will include:
+# - Scaling
+# - 
+# - One-hot Encoding
 #
 # =============================================================================
 # %% [markdown]
