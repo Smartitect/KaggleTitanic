@@ -41,9 +41,15 @@
 # 
 ### Pre-requisites
 #
-#The major non-standard module used is the 'azurelm.dataprep' SDK.  To install the Microsoft Azure ML Dataprep package:
+#The major non-standard modules used are:
+# 
+#The 'azurelm.dataprep' SDK.  To install the Microsoft Azure ML Dataprep package:
 #
 #`pip install azureml-dataprep`
+#
+#The "XG Boost" machine learning package:
+#
+#`pip install xgboost`
 #
 #Documentation is available at the following web sites:
 #
@@ -55,7 +61,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import os
-from sklearn.ensemble import RandomForestClassifier
+import datetime
 
 # %% [markdown]
 #Input data files are available in the "../input/" directory.
@@ -75,6 +81,8 @@ for dirname, _, filenames in os.walk('./kaggle/input'):
 #Load the train and test files as Pandas dataframes...
 df_train = pd.read_csv('./kaggle/input/train.csv')
 df_train.shape
+# %%
+df_train.info()
 
 # %%
 df_test = pd.read_csv('./kaggle/input/test.csv')
@@ -82,6 +90,11 @@ df_test.shape
 
 # %%
 dataflow = dprep.auto_read_file('./kaggle/input/train.csv')
+dataflow.head(10)
+
+# %%
+dataflow_test = dprep.auto_read_file('./kaggle/input/test.csv')
+dataflow_test.head(10)
 
 # %% [markdown]
 # ***
@@ -90,10 +103,37 @@ dataflow = dprep.auto_read_file('./kaggle/input/train.csv')
 #Feature engineering necessary to support exploratory data analysis (EDA) below.
 #
 #In this section a range of feature extraction actions are performed using Microsoft's ML Dataprep SDK for Python:
-#1. Pulling "Title" from the full name of each passenger;
-#3. Counting cabin occupancy and passengers who also shared the same ticket;
-#4. Extract - pulling the "Level" from the cabin (if indeed the passenger had a cabin);
+#1. Append the test data set to training data set so that feature engineering can be addressed collectively;
+#2. Filling in empty values in "Cabin" and "Fare" where simple rules can be applied;
+#3. Pulling "Title" from the full name of each passenger;
+#4. Counting cabin occupancy and passengers who also shared the same ticket;
+#5. Extract - pulling the "Level" from the cabin (if indeed the passenger had a cabin).
 #
+#Then use Pandas to:
+#- Address missing values in "Cabin" and "Level" (where people have no "Cabin" assigned);
+#- Create the training data set;
+#- Extract the target labels from the training data set;
+#- Create the test data set.
+
+# %% [markdown]
+#***
+### Combine Train and Test Data Sets
+#
+# Not best practice, but for good reason - so that I can apply dataprep functionality effectively.
+#
+#%%
+dataflow = dataflow.append_rows([dataflow_test]) 
+
+# %% [markdown]
+#***
+### Address Missing Values in "Fare" and "Cabin"
+#
+# %%
+dataflow = dataflow.replace('Cabin', '', 'None')
+
+#%%
+dataflow = dataflow.fill_nulls('Fare', 0)
+
 # %% [markdown]
 #***
 ### Creation of "Title" feature.
@@ -156,14 +196,13 @@ dataflow = dataflow.summarize(
 ### Creation of "Level" Feature
 
 # %%
-dataflow = dataflow.fill_nulls('Cabin', 'None')
+dataflow.head(100)
 
 # %%
 builder_level = dataflow.builders.derive_column_by_example(source_columns = ['Cabin'], new_column_name = 'Level')
 builder_level.add_example(source_data = {'Cabin': 'C85'}, example_value = 'C')
 builder_level.add_example(source_data = {'Cabin': 'E46'}, example_value = 'E')
 builder_level.add_example(source_data = {'Cabin': 'None'}, example_value = 'None')
-# builder_level.add_example(source_data = {'Cabin': None}, example_value = 'None')
 builder_level.preview() # Preview top 10 rows.
 
 # %%
@@ -201,48 +240,21 @@ profile.columns['CabinOccupancy'].value_counts
 profile.columns['Level'].value_counts
 # %%
 profile.columns['PeopleOnTicket'].value_counts
+
 # %% [markdown]
-#Training data set - finally generate a Pandas dataframe from the dataflow.
+#***
+### Fix Issue With Cabin Occupancy
+#Couldn't figure out a way of doing this inside the dataprep data flow.  So need to set Null cabin counts to zero for both training and 
 # %%
-df_train_1 = dataflow.to_pandas_dataframe()
+df = dataflow.to_pandas_dataframe()
 # %%
-df_train_1['CabinOccupancy'].value_counts()
+df['CabinOccupancy'].value_counts()
 # %%
 # Fix issue with cabin oocupancy count:
-df_train_1['CabinOccupancy'].loc[df_train_1['CabinOccupancy'] == 687] = 0
-# %%
-df_train_1['CabinOccupancy'].value_counts()
-# %%
-df_train_1['Level'].value_counts()
-# %%
-# Investigate level T as this does not exist in Titantic documentaiton:
-df_train_1.loc[df_train_1['Level']=='T']
+df['CabinOccupancy'].loc[df['CabinOccupancy'] == 1014] = 0
 
 # %%
-dataflow_test = dataflow.replace_datasource(dprep.LocalDataSource('./kaggle/input/test.csv'))
-# %%
-profile = dataflow_test.get_profile()
-profile
-# %%
-profile.columns['Title'].value_counts
-# %%
-profile.columns['CabinOccupancy'].value_counts
-# %%
-profile.columns['Level'].value_counts
-# %%
-profile.columns['PeopleOnTicket'].value_counts
-# %% [markdown]
-#Test data set - finally generate a Pandas dataframe from the dataflow.
-# %%
-df_test_1 = dataflow_test.to_pandas_dataframe()
-# %%
-df_test_1['CabinOccupancy'].value_counts()
-# %%
-# Fix issue with cabin oocupancy count:
-df_test_1['CabinOccupancy'].loc[df_test_1['CabinOccupancy'] == 327] = 0
-# %%
-df_test_1['CabinOccupancy'].value_counts()
-
+df['CabinOccupancy'].value_counts()
 
 # %% [markdown]
 #***
@@ -251,16 +263,16 @@ df_test_1['CabinOccupancy'].value_counts()
 #Now going to work through each column in the data set to get an insight into it.
 
 # %%
+df.info()
+
+# %%
 # Generate initial view of data using historgram plot.
-df_train_1.hist(bins=20, figsize=(12,12))
+df.hist(bins=20, figsize=(12,12))
 
 # %%
 # Compute the correlation matrix
-correlation_matrix = df_train_1.corr()
+correlation_matrix = df.corr()
 correlation_matrix['Survived'].sort_values(ascending=False)
-
-# %%
-correlation_matrix['Age'].sort_values(ascending=False)
 
 # %%
 def generate_box_swarm_plot(df, x, y, hue):
@@ -286,22 +298,22 @@ def generate_box_swarm_plot(df, x, y, hue):
     plt.show()
 
 # %%
-generate_box_swarm_plot(df_train_1, 'Sex', 'Age', 'Survived')
+generate_box_swarm_plot(df, 'Sex', 'Age', 'Survived')
 
 # %%
-generate_box_swarm_plot(df_train_1, 'Pclass', 'Age', 'Survived')
+generate_box_swarm_plot(df, 'Pclass', 'Age', 'Survived')
 
 # %%
-generate_box_swarm_plot(df_train_1, 'Title', 'Age', 'Survived')
+generate_box_swarm_plot(df, 'Title', 'Age', 'Survived')
 
 # %%
-generate_box_swarm_plot(df_train_1, 'CabinOccupancy', 'Age', 'Survived')
+generate_box_swarm_plot(df, 'CabinOccupancy', 'Age', 'Survived')
 
 # %%
-generate_box_swarm_plot(df_train_1, 'Level', 'Fare', 'Survived')
+generate_box_swarm_plot(df, 'Level', 'Fare', 'Survived')
 
 # %%
-generate_box_swarm_plot(df_train_1, 'PeopleOnTicket', 'Age', 'Survived')
+generate_box_swarm_plot(df, 'PeopleOnTicket', 'Age', 'Survived')
 
 # %% [markdown]
 #***
@@ -311,22 +323,17 @@ generate_box_swarm_plot(df_train_1, 'PeopleOnTicket', 'Age', 'Survived')
 #
 #2. Feature Engineering - 
 #This will include:
-#- Address missing values in "Level" (where people have no "Cabin" assigned);
-#- Imputing missing ages a passenger using regressor to match based on values in other columns;
-#- Scaling numerical values;
-#- One-hot Encoding categorical values;
+#- Build a Sci_kit Learn pipeline to perform a series of transformations:
+#    - Imputing missing "Age" using regressor to match based on values in other columns;
+#    - Min max scaling numerical values;
+#    - One-hot Encoding categorical values;
+#    - Non-linear transformation of the "Fare" feature.
 #
 # At each stage we will apply feature engineering to both the train and test data sets.
-
 # %% [markdown]
 #***
-### Address Missing Values For "Level"
+### Apply Sci-Kit Learn Pipeline To Transform Data
 #
-df_train_1[['Level']] = df_train_1[['Level']].fillna(value='No Cabin')
-
-# %%
-df_train_1.head(10)
-
 # %%
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -341,7 +348,7 @@ from sklearn.impute import IterativeImputer
 # %%
 # First build lists of the various columns that need different operations performed on them in the pipeline:
 features_to_one_hot_encode = ['Sex', 'Title', 'Level', 'Embarked']
-#features_to_normalize = ['Age']
+features_to_impute_min_max_scale = ['Age']
 features_to_min_max_scale = ['Parch', 'Pclass', 'SibSp', 'CabinOccupancy', 'PeopleOnTicket']
 features_to_transform = ['Fare']
 
@@ -349,13 +356,12 @@ features_to_transform = ['Fare']
 # Then instantiate pipelines
 # This pipeline is set up to one hot encode categorical variables:
 pipeline_one_hot_encode = Pipeline(steps=[('one_hot_encoder', OneHotEncoder())])
-
-# This pipeline is set up to scale numerical features:
-#pipeline_normalize = Pipeline(steps=[('normalizer', StandardScaler())])
-
+# NOTE - had problems getting the Normalize stage to work on the 'Age' column as I had it appearing in two pipelines, eventually figured out I needed to create a speciial pipeline that combined both steps for it.
+# This pipeline is set up to impute missing values and then normalize numerical features:
+pipeline_impute_min_max_scale = Pipeline(steps=[('imputer', IterativeImputer(max_iter=10, random_state=0, add_indicator=False)), ('min_max_scaler', MinMaxScaler())])
+# ('normalizer', StandardScaler())
 # This pipeline is set up to scale numerical features:
 pipeline_min_max_scale = Pipeline(steps=[('min_max_scaler', MinMaxScaler())])
-
 # This piplein is set up to perform a non-linear transformation on numerical features.
 # Note : the "Box Cox" method will only work with strinctly positive values:
 pipeline_transform = Pipeline(steps=[('transformer', PowerTransformer())])
@@ -364,14 +370,13 @@ pipeline_transform = Pipeline(steps=[('transformer', PowerTransformer())])
 # Then put the features list and the transformers together using the column transformer
 column_transformer = ColumnTransformer(transformers=[ \
     ('column_transform_one_hot_encode', pipeline_one_hot_encode, features_to_one_hot_encode), \
-        #('column_transform_normalize', pipeline_normalize, features_to_normalize), \
+        ('column_transform_impute_min_max_scale', pipeline_impute_min_max_scale, features_to_impute_min_max_scale), \
             ('column_transform_min_max_scale', pipeline_min_max_scale, features_to_min_max_scale), \
                 ('column_transform_transform', pipeline_transform, features_to_transform) 
 ], remainder='passthrough', verbose=True, sparse_threshold=0)
-
 # %%
 # Now apply the end to end pipeline to the data:
-numpy_array = column_transformer.fit_transform(df_train_1)
+transformed_data = column_transformer.fit_transform(df)
 
 # %%
 def get_transformer_feature_names(columnTransformer, originalColumnNames):
@@ -388,130 +393,106 @@ def get_transformer_feature_names(columnTransformer, originalColumnNames):
                     trans_features = features
             output_features.extend(trans_features)
         else:
-            print(features)
-            print(originalColumnNames)
             for j in features:
-                print(originalColumnNames[j])
                 output_features.append(originalColumnNames[j])
     return output_features
 
-feature_names = get_transformer_feature_names(column_transformer, list(df_train_1))
+feature_names = get_transformer_feature_names(column_transformer, list(df))
+df_transformed = pd.DataFrame(transformed_data, columns=feature_names)
+df_transformed.head(20)
 
 # %%
-column_transformer.transformers_[3][2]
-
-# %% 
-feature_names
-
-# %%
-list(df_train_1)
-
-# %%
-df_train_2 = pd.DataFrame(numpy_array, columns=feature_names)
-
-# %%
-df_train_2.head(10)
-
-# %%
-df_train_1.info()
-
-# %%
-list(df_train_1)
-
-# %%
-df_train_2.describe()
+df_transformed.info()
 
 # %% [markdown]
 #***
-### Imput Missing Values For "Age"
-
-# %%
-imputer = IterativeImputer(max_iter=10, random_state=0, add_indicator=True)
-output = imputer.fit_transform(df_train_2)
-
-# %%
-df_output = pd.DataFrame(output)
-
-# %%
-df_output
-
-# %%
-df_output.loc[df_output[40] == 1]
-
-# %%
-imputer
-
-# %%
-imputer.get_params()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# %%
-numpy_array
-
-#%%
-df_train_1[['Fare']].hist(bins=50, figsize=(12,12))
-
-#%%
-df_train_1[['Fare']].describe()
-
-#%%
-df_train_1['Fare'].value_counts()
-
-# %%
-df_train_1['Fare'].sort_values(ascending=True)
-
-#%%
-df_train_2[['Fare']].hist(bins=50, figsize=(12,12))
-
-# %%
-df_train_2.head(20)
-
-# %%
-df_train_2.describe()
-
-# %%
-df_train_2
-
-# %%
-column_transformer.get_feature_names()
-
-# %% [markdown]
-#***
-## Part 5 - Exploratory Data Analysis (EDA)
+### Create Training Data Set
 #
-#Now going to work through each column in the data set to get an insight into it.
+# %%
+list_of_columns_to_drop = ['PassengerId', 'Name', 'Ticket', 'Cabin']
+X = df_transformed.loc[df_transformed['Survived'] >= 0 ]
+X = X.drop(list_of_columns_to_drop, axis=1)
 
 # %%
-y = df["Survived"]
+X.info()
 
-features = ["Pclass", "Sex", "SibSp", "Parch"]
-X = pd.get_dummies(train_data[features])
-X_test = pd.get_dummies(test_data[features])
+# %% [markdown]
+#***
+### Extract Target Label From Training Data Set
+#
+# %%
+y = X[['Survived']]
+X = X.drop(['Survived'], axis=1)
 
+# %%
+y.info()
+
+# %%
+y=y.astype('int')
+
+# %% [markdown]
+#***
+### Create Test data set - finally generate a Pandas dataframe from the dataflow.
+# %%
+X_test = df_transformed.loc[pd.isnull(df['Survived'])]
+df_passenger_IDs = pd.DataFrame(X_test['PassengerId']).reset_index(drop=True)
+df_passenger_IDs
+
+# %%
+X_test = X_test.drop(list_of_columns_to_drop, axis=1)
+X_test = X_test.drop(['Survived'], axis=1)
+X_test.info()
+
+# %% [markdown]
+#***
+## Part 6 - Run The Models
+#
+#Now the fun begins!  Can run the model against the data. 
+#
+# %% [markdown]
+#***
+## Random Forreset Classifier
+
+# %%
+from sklearn.ensemble import RandomForestClassifier
+
+# %%
 model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=1)
-model.fit(X, y)
-predictions = model.predict(X_test)
 
-output = pd.DataFrame({'PassengerId': test_data.PassengerId, 'Survived': predictions})
-output.to_csv('my_submission.csv', index=False)
-print("Your submission was successfully saved!")
+# %%
+model.fit(X, y)
+
+# %%
+predictions = model.predict(X_test)
+predictions
+
+# %%
+def save_predictions_to_csv(df_passenger_IDs, predictions, model_name):
+    df_predictions = pd.DataFrame(predictions, columns=['Survived'])
+    df_submission = df_passenger_IDs.join(df_predictions)
+    datetime_string = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+    df_submission.to_csv('{}_submission_{}.csv'.format(model_name, datetime_string), index=False)
+
+# %%
+save_predictions_to_csv(df_passenger_IDs, predictions, 'random_forrest_classifier')
+
+# %% [markdown]
+#***
+## K Nearest Neighbours
+#
+
+
+# %% [markdown]
+#***
+## XG Boost
+#
+# %%
+import xgboost as xgb
+
+# %%
+gbm = xgb.XGBClassifier(max_depth=3, n_estimators=300, learning_rate=0.05)
+
+# %%
+gbm.fit(train_X, train_y)
+
+predictions = gbm.predict(test_X)
