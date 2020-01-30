@@ -402,7 +402,58 @@ df_transformed = pd.DataFrame(transformed_data, columns=feature_names)
 df_transformed.head(20)
 
 # %%
+list(df_transformed)
+
+# %%
+dictionary_of_column_types = { \
+    'Sex_female': int,
+    'Sex_male': int,
+    'Title_Capt': int,
+    'Title_Col': int,
+    'Title_Countess': int,
+    'Title_Don': int,
+    'Title_Dona': int,
+    'Title_Dr': int,
+    'Title_Jonkheer': int,
+    'Title_Lady': int,
+    'Title_Major': int,
+    'Title_Master': int,
+    'Title_Miss': int,
+    'Title_Mlle': int,
+    'Title_Mme': int,
+    'Title_Mr': int,
+    'Title_Mrs': int,
+    'Title_Ms': int,
+    'Title_Rev': int,
+    'Title_Sir': int,
+    'Level_A': int,
+    'Level_B': int,
+    'Level_C': int,
+    'Level_D': int,
+    'Level_E': int,
+    'Level_F': int,
+    'Level_G': int,
+    'Level_None': int,
+    'Level_T': int,
+    'Embarked_': int,
+    'Embarked_C': int,
+    'Embarked_Q': int,
+    'Embarked_S': int,
+    'Age': float,
+    'Parch': float,
+    'Pclass': float,
+    'SibSp': float,
+    'CabinOccupancy': float,
+    'PeopleOnTicket': float,
+    'Fare': float,
+    'PassengerId': int,
+    'Survived': int
+}
+#df_transformed = df_transformed.astype(dictionary_of_column_types)
 df_transformed.info()
+
+# %%
+df_transformed
 
 # %% [markdown]
 #***
@@ -457,13 +508,13 @@ X_test.info()
 from sklearn.ensemble import RandomForestClassifier
 
 # %%
-model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=1)
+model_rfc = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=1)
 
 # %%
-model.fit(X, y)
+model_rfc.fit(X, y)
 
 # %%
-predictions = model.predict(X_test)
+predictions = model_rfc.predict(X_test)
 predictions
 
 # %%
@@ -471,7 +522,7 @@ def save_predictions_to_csv(df_passenger_IDs, predictions, model_name):
     df_predictions = pd.DataFrame(predictions, columns=['Survived'])
     df_submission = df_passenger_IDs.join(df_predictions)
     datetime_string = datetime.datetime.now().strftime("%Y%m%d_%H%M")
-    df_submission.to_csv('{}_submission_{}.csv'.format(model_name, datetime_string), index=False)
+    df_submission.to_csv('./kaggle/output/{}_submission_{}.csv'.format(model_name, datetime_string), index=False)
 
 # %%
 save_predictions_to_csv(df_passenger_IDs, predictions, 'random_forrest_classifier')
@@ -480,6 +531,21 @@ save_predictions_to_csv(df_passenger_IDs, predictions, 'random_forrest_classifie
 #***
 ## K Nearest Neighbours
 #
+# %%
+from sklearn.neighbors import KNeighborsClassifier
+
+# %%
+model_knn = KNeighborsClassifier(n_neighbors=3)
+
+# %%
+model_knn.fit(X, y)
+
+# %%
+predictions = model_knn.predict(X_test)
+predictions
+
+# %%
+save_predictions_to_csv(df_passenger_IDs, predictions, 'k_nearest_neighbours')
 
 
 # %% [markdown]
@@ -490,9 +556,16 @@ save_predictions_to_csv(df_passenger_IDs, predictions, 'random_forrest_classifie
 import xgboost as xgb
 
 # %%
-gbm = xgb.XGBClassifier(max_depth=3, n_estimators=300, learning_rate=0.05)
+model_gbm = xgb.XGBClassifier(max_depth=3, n_estimators=300, learning_rate=0.05)
 
 # %%
-gbm.fit(train_X, train_y)
+model_gbm.fit(X, y)
 
-predictions = gbm.predict(test_X)
+# %%
+predictions = model_gbm.predict(X_test)
+predictions
+
+# %%
+save_predictions_to_csv(df_passenger_IDs, predictions, 'gradient_boosted_decision_tree')
+
+# %%
