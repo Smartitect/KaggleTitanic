@@ -256,6 +256,10 @@ df['CabinOccupancy'].loc[df['CabinOccupancy'] == 1014] = 0
 # %%
 df['CabinOccupancy'].value_counts()
 
+# %%
+# Output data to file...
+df.to_csv('./titanic_data.csv')
+
 # %% [markdown]
 #***
 ## Part 4 - Inital Exploratory Data Analysis (EDA)
@@ -379,11 +383,13 @@ column_transformer = ColumnTransformer(transformers=[ \
 transformed_data = column_transformer.fit_transform(df)
 
 # %%
-def get_transformer_feature_names(columnTransformer, originalColumnNames):
+def get_transformer_feature_names(column_transformer, original_dataframe, transformed_dataframe):
 
     output_features = []
 
-    for name, pipe, features in columnTransformer.transformers_:
+    original_column_names = original_dataframe.columns
+
+    for name, pipe, features in column_transformer.transformers_:
         if name!='remainder':
             for i in pipe:
                 trans_features = []
@@ -394,12 +400,16 @@ def get_transformer_feature_names(columnTransformer, originalColumnNames):
             output_features.extend(trans_features)
         else:
             for j in features:
-                output_features.append(originalColumnNames[j])
-    return output_features
+                output_features.append(original_column_names[j])
+    
+    transformed_dataframe = pd.DataFrame(transformed_dataframe, columns=output_features)
+    return transformed_dataframe
 
-feature_names = get_transformer_feature_names(column_transformer, list(df))
-df_transformed = pd.DataFrame(transformed_data, columns=feature_names)
-df_transformed.head(20)
+# %%
+transformed_data = get_transformer_feature_names(column_transformer, df, transformed_data)
+
+# %%
+transformed_data.head(20)
 
 # %%
 list(df_transformed)
